@@ -1,1 +1,209 @@
+## 树链剖分
 
+```c++
+int n, m;
+int h[N], e[N], ne[N], w[N], idx;
+void add(int a, int b) { e[idx] = b, ne[idx] = h[a], h[a] = idx++; }
+// id表示重新标号后对应的下标，nw是对应的值
+int id[N], nw[N], cnt;
+// 树链剖分五件套
+// 子树大小  父节点  重儿子  所在重链的开始节点  当前结点的深度
+int sz[N], fa[N], son[N], top[N], dep[N];
+struct Node {
+  int l, r, size;
+  ll add, sum;
+} tr[N << 2];
+// 处理子树节点数并找到重儿子
+void dfs1(int u, int pa, int depth) {
+  sz[u] = 1, fa[u] = pa, dep[u] = depth;
+  for (int i = h[u]; ~i; i = ne[i]) {
+    int j = e[i];
+    if (j == pa) continue;
+    dfs1(j, u, depth + 1);
+    sz[u] += sz[j];
+    // 重儿子为子节点中子树节点数最大的那个节点
+    if (sz[j] > sz[son[u]]) son[u] = j;
+  }
+}
+// 找重链，即找到每个点所属重链的开始节点，同时将树转化为序列
+void dfs2(int u, int st) {
+  id[u] = ++cnt, nw[cnt] = w[u], top[u] = st;
+  if (!son[u]) return;
+  // 优先遍历重儿子
+  dfs2(son[u], st);
+  for (int i = h[u]; ~i; i = ne[i]) {
+    int j = e[i];
+    if (j == fa[u] || j == son[u]) continue;
+    dfs2(j, j);
+  }
+}
+
+//... 线段树操作
+void build(int u, int l, int r) {
+  tr[u] = {l, r, 1, 0, nw[l]};
+  if (l == r) return;
+  int mid = l + r >> 1;
+  build(u << 1, l, mid), build(u << 1 | 1, mid + 1, r);
+  pushup(u);
+}
+//... 线段树操作
+
+// 树链剖分修改查询操作
+// 修改路径
+void update_path(int u, int v, int x) {
+  while (top[u] != top[v]) {
+    if (dep[top[u]] < dep[top[v]]) swap(u, v);
+    update(1, id[top[u]], id[u], x);
+    u = fa[top[u]];
+  }
+  if (dep[u] < dep[v]) swap(u, v);
+  update(1, id[v], id[u], x);
+}
+// 查询路径
+ll query_path(int u, int v) {
+  ll res = 0;
+  while (top[u] != top[v]) {
+    if (dep[top[u]] < dep[top[v]]) swap(u, v);
+    res += query(1, id[top[u]], id[u]);
+    u = fa[top[u]];
+  }
+  if (dep[u] < dep[v]) swap(u, v);
+  res += query(1, id[v], id[u]);
+  return res;
+}
+// 修改子树
+void update_tree(int u, int x) { update(1, id[u], id[u] + sz[u] - 1, x); }
+// 查询子树
+ll query_tree(int u) { return query(1, id[u], id[u] + sz[u] - 1); }
+
+void solve() {
+  // ...
+  // 找重儿子，同时更新节点相关信息
+  dfs1(1, -1, 1);
+  // 树-->链
+  dfs2(1, 1);
+  // 线段树
+  build(1, 1, n);
+  //...
+}
+```
+
+## 动态树
+
+```c++
+struct Node {
+  int s[2], p, v;
+  int rev, sum;
+} tr[N];
+int stk[N];
+
+void pushrev(int u) {
+  swap(tr[u].s[0], tr[u].s[1]);
+  tr[u].rev ^= 1;
+}
+void pushup(int u) {
+  tr[u].sum = tr[tr[u].s[0]].sum ^ tr[u].v ^ tr[tr[u].s[1]].sum;
+}
+void pushdown(int u) {
+  if (tr[u].rev) {
+    pushrev(tr[u].s[0]);
+    pushrev(tr[u].s[1]);
+    tr[u].rev = 0;
+  }
+}
+// splay
+// 判断结点是否是所在splay的根节点
+bool isroot(int x) { return tr[tr[x].p].s[0] != x && tr[tr[x].p].s[1] != x; }
+void rotate(int x) {
+  int y = tr[x].p, z = tr[y].p;
+  int k = tr[y].s[1] == x;
+  if (!isroot(y)) tr[z].s[tr[z].s[1] == y] = x;
+  tr[x].p = z;
+  tr[y].s[k] = tr[x].s[k ^ 1], tr[tr[x].s[k ^ 1]].p = y;
+  tr[x].s[k ^ 1] = y, tr[y].p = x;
+  pushup(y), pushup(x);
+}
+void splay(int x) {
+  int top = 0, r = x;
+  stk[++top] = x;
+  while (!isroot(r)) stk[++top] = r = tr[r].p;
+  while (top) pushdown(stk[top--]);
+  while (!isroot(x)) {
+    int y = tr[x].p, z = tr[y].p;
+    if (!isroot(y)) {
+      if ((tr[y].s[1] == x) ^ (tr[z].s[1] == y))
+        rotate(x);
+      else
+        rotate(y);
+    }
+    rotate(x);
+  }
+}
+// LCT
+//  建立一条从原树的根到x 的路径，同时将x变为所在splay树的根节点
+void access(int x) {
+  int z = x;
+  for (int y = 0; x; y = x, x = tr[x].p) {
+    splay(x);
+    tr[x].s[1] = y, pushup(x);
+  }
+  splay(z);
+}
+// 将x变为其所在原树的根节点
+void makeroot(int x) {
+  access(x);
+  pushrev(x);
+}
+// 找到x所在的原树的根节点，并将原树的根节点旋转到splay的根节点
+int findroot(int x) {
+  access(x);
+  while (tr[x].s[0]) {
+    pushdown(x);
+    x = tr[x].s[0];
+  }
+  splay(x);
+  return x;
+}
+// 在x和y之间的路径上建立一个splay，根节点是y，便于查询信息
+void split(int x, int y) {
+  makeroot(x);
+  access(y);
+}
+// 如果x与y不连通，则加入一条x和y之间的边
+void link(int x, int y) {
+  makeroot(x);
+  if (findroot(y) != x) tr[x].p = y;
+}
+// 如果x和y之间存在边，则删除该边
+void cut(int x, int y) {
+  makeroot(x);
+  if (findroot(y) == x && tr[y].p == x && !tr[y].s[0]) {
+    tr[x].s[1] = tr[y].p = 0;
+    pushup(x);
+  }
+}
+void solve() {
+  int n, m;
+  cin >> n >> m;
+  for (int i = 1; i <= n; i++) cin >> tr[i].v;
+  while (m--) {
+    int op, x, y;
+    cin >> op >> x >> y;
+    if (op == 0) {
+      split(x, y);//建立splay，方便求相关信息
+      cout << tr[y].sum << endl;
+    } else if (op == 1)
+      link(x, y);
+    else if (op == 2)
+      cut(x, y);
+    else {
+      // 修改某个结点的值
+      splay(x);
+      tr[x].v = y;
+      pushup(x);
+    }
+  }
+}
+```
+
+## 
