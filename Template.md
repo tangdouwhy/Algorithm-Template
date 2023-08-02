@@ -822,6 +822,15 @@ bitset, 圧位
     reset()  把所有位变成0
     flip()  等价于~
     flip(k) 把第k位取反
+        
+iota() 范围赋值
+atoi() cstr转int
+lower_bound() 第三个参数的值传在仿函数的第二个参数里面
+class Com {
+ public:
+  bool operator()(pll b, ll a) { return a > b.second; }
+};
+ll tot = lower_bound(a + 1, a + i, a[i].first, Com()) - a;
 ```
 
 # 搜素与图论
